@@ -310,6 +310,7 @@ def cmd_apply(args, reply=None):
         shutil.rmtree(backup)
     backup.mkdir()
     created, log, extra, changed, fails, note = [], [], [], [], 0, ""
+    ran = {}
 
     def keep(p):
         rel = p.relative_to(ROOT.resolve())
@@ -387,6 +388,7 @@ def cmd_apply(args, reply=None):
                 if input(f"{clock()}  {yellow('ASK ')} chat wants to run:  {bold(arg)}\n          allow? [y/N] ").strip().lower() == "y":
                     r = subprocess.run(arg, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
                     extra.append(f"RUN {arg}\nexit code {r.returncode}\n" + tail(r.stdout + r.stderr))
+                    ran[arg.strip()] = len(changed)
                     step(f"ran it, exit code {r.returncode}")
                 else:
                     extra.append(f"RUN {arg}: the human refused to run this")
@@ -397,7 +399,10 @@ def cmd_apply(args, reply=None):
     (backup / "_created.json").write_text(json.dumps(created))
     report = ["RESULT OF YOUR LAST REPLY", *log]
     verdict, secs = "none", 0
-    if cfg.get("test"):
+    if cfg.get("test") and ran.get(cfg["test"].strip()) == len(changed):
+        report += ["", "The test command is the RUN above; its result is the test result."]
+        step(dim("tests already ran this round as the chat's command, not running twice"))
+    elif cfg.get("test"):
         step(f"running tests: {cfg['test']} ...")
         t0 = time.time()
         r = subprocess.run(cfg["test"], shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
